@@ -338,6 +338,7 @@ int main()
 	printf("\n");
 	return 0;
 }
+char* getFilePath(char* cmd);
 
 int process_command(struct command_t *command)
 {
@@ -379,16 +380,30 @@ int process_command(struct command_t *command)
 		command->args[command->arg_count - 1] = NULL;
 
 		/// TODO: do your own exec with path resolving using execv()
-
+		char *path = getFilePath(command->name);
+		execv(path, command->args);
 		exit(0);
 	}
 	else
 	{
 		/// TODO: Wait for child to finish if command is not running in background
-
+		wait(NULL);
 		return SUCCESS;
 	}
 
 	printf("-%s: %s: command not found\n", sysname, command->name);
 	return UNKNOWN;
+}
+char* getFilePath(char* cmd){
+	char whichCommand[128] = "which ";
+	strcat(whichCommand, cmd);
+	strcat(whichCommand, " > path.txt");
+	system(whichCommand);
+
+	FILE *fd = fopen("path.txt", "r");
+	char *buf = (char *)malloc(128 * sizeof(char));
+	fscanf(fd, "%s", buf);
+	fclose(fd);
+	remove("path.txt");
+	return buf;
 }
