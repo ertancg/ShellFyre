@@ -383,6 +383,7 @@ int process_command(struct command_t *command)
 		char *path = getFilePath(command->name);
 		execv(path, command->args);
 		exit(0);
+		exit(0);
 	}
 	else
 	{
