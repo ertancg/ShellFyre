@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <errno.h>
 const char *sysname = "shellfyre";
+const char cwdHistory[1024];
 
 enum return_codes
 {
@@ -315,9 +316,13 @@ int prompt(struct command_t *command)
 }
 
 int process_command(struct command_t *command);
-
+void formatFilePath(char* path);
 int main()
 {
+	getcwd(cwdHistory, sizeof(cwdHistory));
+	printf("directory: %s\n",cwdHistory);
+	formatFilePath(cwdHistory);
+	printf("directory: %s\n",cwdHistory);
 	while (1)
 	{
 		struct command_t *command = malloc(sizeof(struct command_t));
@@ -354,8 +359,17 @@ int process_command(struct command_t *command)
 		if (command->arg_count > 0)
 		{
 			r = chdir(command->args[0]);
-			if (r == -1)
+			if (r == -1){
 				printf("-%s: %s: %s\n", sysname, command->name, strerror(errno));
+			}else{
+				
+				char directory[128] = "echo ";
+				strcat(directory, command->args[0]);
+				strcat(directory, " >> ");
+				strcat(directory, cwdHistory);
+				strcat(directory, "/.test1.txt");
+				system(directory);
+			}
 			return SUCCESS;
 		}
 	}
@@ -405,6 +419,25 @@ char* getFilePath(char* cmd){
 	char *buf = (char *)malloc(128 * sizeof(char));
 	fscanf(fd, "%s", buf);
 	fclose(fd);
-	remove("path.txt");
+	system("rm path.txt");
 	return buf;
+}
+void formatFilePath(char* path){
+	const char s[2] = " ";
+	char result[1024];
+	char* token;
+
+	memset(result, 0, sizeof(result));
+	//strcat(result, "~");
+	token = strtok(path, s);
+
+	while(token != NULL){
+		strcat(result, token);
+		token = strtok(NULL, s);
+		if(token == NULL) break;
+		strcat(result, "\\ ");
+	}
+	printf("%s", result);
+	memset(path, 0, sizeof(path));
+	memcpy(path, result, sizeof(result));
 }
