@@ -378,7 +378,9 @@ int process_command(struct command_t *command)
 	}
 	if(strcmp(command->name, "test") == 0){
 		char abc;
-		abc = getchar();
+		abc = getchar(); 
+
+		
 		return SUCCESS;
 	}
 	// TODO: Implement your custom commands here
