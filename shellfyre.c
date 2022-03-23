@@ -402,7 +402,11 @@ int process_command(struct command_t *command)
 	else
 	{
 		/// TODO: Wait for child to finish if command is not running in background
-		wait(NULL);
+		if (command->background == 0) {
+		    wait(NULL);
+		}
+		//      wait(NULL);
+
 		return SUCCESS;
 	}
 
