@@ -7,7 +7,8 @@
 #include <stdbool.h>
 #include <errno.h>
 const char *sysname = "shellfyre";
-const char cwdHistory[1024];
+char historyFilePath[1024];
+char absoluteHistoryFilePath[1024];
 
 enum return_codes
 {
@@ -114,6 +115,7 @@ int parse_command(char *buf, struct command_t *command)
 		command->background = true;
 
 	char *pch = strtok(buf, splitters);
+	printf("debud: %s", pch);
 	command->name = (char *)malloc(strlen(pch) + 1);
 	if (pch == NULL)
 		command->name[0] = 0;
@@ -308,7 +310,7 @@ int prompt(struct command_t *command)
 
 	parse_command(buf, command);
 
-	print_command(command); // DEBUG: uncomment for debugging
+	//print_command(command); // DEBUG: uncomment for debugging
 
 	// restore the old settings
 	tcsetattr(STDIN_FILENO, TCSANOW, &backup_termios);
@@ -319,10 +321,10 @@ int process_command(struct command_t *command);
 void formatFilePath(char* path);
 int main()
 {
-	getcwd(cwdHistory, sizeof(cwdHistory));
-	printf("directory: %s\n",cwdHistory);
-	formatFilePath(cwdHistory);
-	printf("directory: %s\n",cwdHistory);
+	getcwd(historyFilePath, sizeof(historyFilePath));
+	strcat(historyFilePath, "/directoryHistory.txt");
+	memcpy(absoluteHistoryFilePath, historyFilePath, sizeof(historyFilePath));
+	formatFilePath(historyFilePath);
 	while (1)
 	{
 		struct command_t *command = malloc(sizeof(struct command_t));
@@ -363,18 +365,56 @@ int process_command(struct command_t *command)
 				printf("-%s: %s: %s\n", sysname, command->name, strerror(errno));
 			}else{
 				
-				char directory[128] = "echo ";
-				strcat(directory, command->args[0]);
-				strcat(directory, " >> ");
-				strcat(directory, cwdHistory);
-				strcat(directory, "/.test1.txt");
-				system(directory);
+				char cdHistoryCommand[128] = "echo ";
+				char changedPath[1024];
+				getcwd(changedPath, sizeof(changedPath)); 
+				strcat(cdHistoryCommand, changedPath);
+				strcat(cdHistoryCommand, " >> ");
+				strcat(cdHistoryCommand, historyFilePath);
+				system(cdHistoryCommand);
 			}
 			return SUCCESS;
 		}
 	}
-
+	if(strcmp(command->name, "test") == 0){
+		char abc;
+		abc = getchar();
+		return SUCCESS;
+	}
 	// TODO: Implement your custom commands here
+	if(strcmp(command->name, "cdh") == 0){
+		char absolutePath[1024];
+		char *ptr = realpath(absoluteHistoryFilePath, absolutePath);
+		char historyPathList[10][1024];
+		FILE *fd = fopen(absolutePath, "r");
+
+		if (fd == NULL){
+        	printf("Error: could not open file.\n");
+    	}else{
+    		char buffer[1024];
+			int directoryIndex = 0;
+			int directoryInput;
+
+			while(fgets(buffer, 1024, fd) != NULL){
+				memcpy(historyPathList[directoryIndex], buffer, sizeof(buffer));
+				directoryIndex++;
+			}
+			fclose(fd);
+			while(1){
+				char letter = 'a';
+				directoryIndex--;
+				printf("%c %d) ~%s", letter + directoryIndex, directoryIndex + 1, historyPathList[directoryIndex]);
+				if(directoryIndex == 0){
+					printf("Select directory by letter or number: ");
+					directoryInput = getchar();
+					//printf("%d\n", ('a' - (directoryInput - 1)));
+					break;
+				} 
+			}
+			return SUCCESS; 
+    	}
+    	
+	}
 
 	pid_t pid = fork();
 
@@ -423,12 +463,12 @@ char* getFilePath(char* cmd){
 	return buf;
 }
 void formatFilePath(char* path){
-	const char s[2] = " ";
+	char s[2] = " ";
 	char result[1024];
 	char* token;
 
 	memset(result, 0, sizeof(result));
-	//strcat(result, "~");
+	
 	token = strtok(path, s);
 
 	while(token != NULL){
@@ -437,7 +477,7 @@ void formatFilePath(char* path){
 		if(token == NULL) break;
 		strcat(result, "\\ ");
 	}
-	printf("%s", result);
-	memset(path, 0, sizeof(path));
+	memset(path, 0, 1024);
 	memcpy(path, result, sizeof(result));
 }
+
