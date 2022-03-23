@@ -6,7 +6,11 @@
 #include <string.h>
 #include <stdbool.h>
 #include <errno.h>
+#include <ctype.h>
+
+
 const char *sysname = "shellfyre";
+//Global variables to hold the path the shell started in.
 char historyFilePath[1024];
 char absoluteHistoryFilePath[1024];
 
@@ -115,7 +119,7 @@ int parse_command(char *buf, struct command_t *command)
 		command->background = true;
 
 	char *pch = strtok(buf, splitters);
-	printf("debud: %s", pch);
+	
 	command->name = (char *)malloc(strlen(pch) + 1);
 	if (pch == NULL)
 		command->name[0] = 0;
@@ -318,11 +322,15 @@ int prompt(struct command_t *command)
 }
 
 int process_command(struct command_t *command);
+
+//Helper to parse the file path. Adds escape characters to the file path.
 void formatFilePath(char* path);
+
 int main()
 {
 	getcwd(historyFilePath, sizeof(historyFilePath));
-	strcat(historyFilePath, "/directoryHistory.txt");
+	//Getting current directory that shell started and parsing the file path to handle escape characters.
+	strcat(historyFilePath, "/.directoryHistory.txt");
 	memcpy(absoluteHistoryFilePath, historyFilePath, sizeof(historyFilePath));
 	formatFilePath(historyFilePath);
 	while (1)
@@ -345,7 +353,11 @@ int main()
 	printf("\n");
 	return 0;
 }
+
+//Helper functions for cdh command.
 char* getFilePath(char* cmd);
+int countLinesOfHistory(char* path);
+void reformatHistoryFile(char* path, int size);
 
 int process_command(struct command_t *command)
 {
@@ -356,15 +368,14 @@ int process_command(struct command_t *command)
 	if (strcmp(command->name, "exit") == 0)
 		return EXIT;
 
-	if (strcmp(command->name, "cd") == 0)
-	{
+	if (strcmp(command->name, "cd") == 0){
 		if (command->arg_count > 0)
 		{
 			r = chdir(command->args[0]);
 			if (r == -1){
 				printf("-%s: %s: %s\n", sysname, command->name, strerror(errno));
 			}else{
-				
+				//record all the cd commands in directoryHistory.txt
 				char cdHistoryCommand[128] = "echo ";
 				char changedPath[1024];
 				getcwd(changedPath, sizeof(changedPath)); 
@@ -376,52 +387,100 @@ int process_command(struct command_t *command)
 			return SUCCESS;
 		}
 	}
-	if(strcmp(command->name, "test") == 0){
-		char abc;
-		abc = getchar(); 
 
-		
-		return SUCCESS;
-	}
 	// TODO: Implement your custom commands here
-	if(strcmp(command->name, "cdh") == 0){
-		char absolutePath[1024];
-		char *ptr = realpath(absoluteHistoryFilePath, absolutePath);
-		char historyPathList[10][1024];
-		FILE *fd = fopen(absolutePath, "r");
-
-		if (fd == NULL){
-        	printf("Error: could not open file.\n");
-    	}else{
-    		char buffer[1024];
-			int directoryIndex = 0;
-			int directoryInput;
-
-			while(fgets(buffer, 1024, fd) != NULL){
-				memcpy(historyPathList[directoryIndex], buffer, sizeof(buffer));
-				directoryIndex++;
-			}
-			fclose(fd);
-			while(1){
-				char letter = 'a';
-				directoryIndex--;
-				printf("%c %d) ~%s", letter + directoryIndex, directoryIndex + 1, historyPathList[directoryIndex]);
-				if(directoryIndex == 0){
-					printf("Select directory by letter or number: ");
-					directoryInput = getchar();
-					//printf("%d\n", ('a' - (directoryInput - 1)));
-					break;
-				} 
-			}
-			return SUCCESS; 
-    	}
-    	
-	}
-
+	
 	pid_t pid = fork();
 
-	if (pid == 0) // child
-	{
+	if (pid == 0){ // child
+
+		//'cdh' command implementation.
+		if(strcmp(command->name, "cdh") == 0){
+
+			//canonicalized absolute pathname of the file, without the formats.
+			char absolutePath[1024];
+			char *ptr = realpath(absoluteHistoryFilePath, absolutePath);
+
+			//history path list from the directoryHistory.txt.
+			char historyPathList[10][1024];
+			//opening directoryHistory.txt.
+			FILE *fd = fopen(absolutePath, "r");
+
+			if (fd == NULL){
+				printf("Error: could not open file.\n");
+			}else{
+
+				//directoryHistory.txt buffer.
+				char buffer[1024];
+
+				//how many entries in the directoryHistory.txt
+				int directoryIndex = 0;
+				//user input to select which directory it wants to switch to. 
+				char userDirectoryInput[128];
+				//real index based on the user input.
+				int indexOfInput;
+
+				//line count of the directoryHistory.txt.
+				int fileLength = countLinesOfHistory(absolutePath);
+
+				//checks whether the file exceeds 10, if it is it reformats the directoryHistory.txt.
+				if(fileLength > 10){
+					reformatHistoryFile(absolutePath, fileLength);
+				}
+
+				//reading directoryHistory.txt
+				while(fgets(buffer, 1024, fd) != NULL){
+					memcpy(historyPathList[directoryIndex], buffer, sizeof(buffer));
+					if(historyPathList[directoryIndex][strlen(buffer) - 1] == '\n'){
+						historyPathList[directoryIndex][strlen(buffer) - 1] = '\0';
+					}
+					directoryIndex++;
+				}
+				fclose(fd);
+
+
+				while(1){
+					char letter = 'a';
+
+					//print all the entries in the historyPathList
+					directoryIndex--;
+					printf("%c %d) ~%s\n", letter + directoryIndex, directoryIndex + 1, historyPathList[directoryIndex]);
+
+					//after all the entries printed user selection is required to switch the directory.
+					if(directoryIndex == 0){
+						printf("Select directory by letter or number: ");
+
+						if(fgets(userDirectoryInput, 128, stdin) != NULL){
+
+							//this if-else block checks the given input is integer or char.
+							if(isdigit(userDirectoryInput[0]) > 0){
+								indexOfInput = atoi(userDirectoryInput);
+								if(indexOfInput > 10 || indexOfInput < 0){
+									printf("Inpute cannot be larger than 10 or less than 0.\n");
+								}else{
+									r = chdir(historyPathList[indexOfInput - 1]);
+									if (r == -1){
+										printf("-%s: %s: path: %s, %s\n", sysname, command->name, historyPathList[abs(indexOfInput)],strerror(errno));
+									}
+								}
+							}else{
+								indexOfInput = letter - userDirectoryInput[0];
+								if(abs(indexOfInput) > 10){
+									printf("Inpute cannot be larger than 10 or less than 0.\n");
+								}else{
+									r = chdir(historyPathList[abs(indexOfInput)]);
+									if (r == -1){
+										printf("-%s: %s: path: %s, %s\n", sysname, command->name, historyPathList[abs(indexOfInput)],strerror(errno));
+									}
+								}
+							}
+						}
+						break;
+					} 
+				}
+				exit(0);
+			}
+		}
 		// increase args size by 2
 		command->args = (char **)realloc(
 			command->args, sizeof(char *) * (command->arg_count += 2));
@@ -439,10 +498,7 @@ int process_command(struct command_t *command)
 		char *path = getFilePath(command->name);
 		execv(path, command->args);
 		exit(0);
-		exit(0);
-	}
-	else
-	{
+	}else{
 		/// TODO: Wait for child to finish if command is not running in background
 		wait(NULL);
 		return SUCCESS;
@@ -451,6 +507,12 @@ int process_command(struct command_t *command)
 	printf("-%s: %s: command not found\n", sysname, command->name);
 	return UNKNOWN;
 }
+/**	
+ *	Helper function for execv. Finds the path of the main unix commands by calling
+ * 'which' command, which searches files in users paths.
+ *	@param  cmd 	description: command name to search for in users paths.
+ *	@return buf 	description: path of command that is searched.
+ */
 char* getFilePath(char* cmd){
 	char whichCommand[128] = "which ";
 	strcat(whichCommand, cmd);
@@ -464,6 +526,12 @@ char* getFilePath(char* cmd){
 	system("rm path.txt");
 	return buf;
 }
+/** 
+ *	This functions takes a path and formats it by removing spaces and adding 
+ *  escape character '\'.
+ *
+ *	@param 	path 	description: path to be formatted
+ */
 void formatFilePath(char* path){
 	char s[2] = " ";
 	char result[1024];
@@ -481,5 +549,53 @@ void formatFilePath(char* path){
 	}
 	memset(path, 0, 1024);
 	memcpy(path, result, sizeof(result));
+}
+/** 
+ *	This functions takes a file path and returns the line count of the texts in it.
+ *
+ *	@param 	path 	description: path to be counted.
+ *  @return count 	description: line count of the file.
+ */
+int countLinesOfHistory(char* path){
+	FILE *fd = fopen(path, "r");
+	int count = 0;
+	char buffer[1024];
+	while(fgets(buffer, 1024, fd) != NULL){
+		count++;
+	}
+	fclose(fd);
+	return count;
+}
+/** 
+ *	This functions takes a file path, reads all the lines and overwrites it to have
+ *  the last 10 lines of the file.
+ *
+ *	@param 	path 	description: path to be modified.
+ *  @param 	size 	description: line count of the file
+ */
+void reformatHistoryFile(char *path, int size){
+	char fileBuffer[size][1024];
+	FILE *fd = fopen(path, "r");
+
+	char buffer[1024];
+	int index = 0;
+	int count = 0;
+
+	while(fgets(buffer, 1024, fd) != NULL){
+		memcpy(fileBuffer[index], buffer, sizeof(buffer));
+		index++;
+	}
+
+	fclose(fd);
+	
+	fd = fopen(path, "w");
+
+	while(count < 10){
+		fputs(fileBuffer[index-1], fd);
+		index--;
+		count++;
+	}
+
+	fclose(fd);
 }
 
