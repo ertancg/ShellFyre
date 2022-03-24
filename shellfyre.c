@@ -389,6 +389,12 @@ int process_command(struct command_t *command)
 	}
 
 	// TODO: Implement your custom commands here
+
+	int cdhPipe[2], nbytes;
+
+	if(pipe(cdhPipe) < 0){
+		printf("Error when creating cdhPipe: %s", strerror(errno));
+	}
 	
 	pid_t pid = fork();
 
@@ -455,23 +461,23 @@ int process_command(struct command_t *command)
 							//this if-else block checks the given input is integer or char.
 							if(isdigit(userDirectoryInput[0]) > 0){
 								indexOfInput = atoi(userDirectoryInput);
-								if(indexOfInput > 10 || indexOfInput < 0){
-									printf("Inpute cannot be larger than 10 or less than 0.\n");
+								if(indexOfInput > 10 || indexOfInput < 0 || indexOfInput > fileLength - 1){
+									printf("Input cannot be larger than 10 or less than 0 or greater than the history list.\n");
+									write(cdhPipe[1], " ", 2);
+									close(cdhPipe[1]);
 								}else{
-									r = chdir(historyPathList[indexOfInput - 1]);
-									if (r == -1){
-										printf("-%s: %s: path: %s, %s\n", sysname, command->name, historyPathList[abs(indexOfInput)],strerror(errno));
-									}
+									write(cdhPipe[1], historyPathList[indexOfInput - 1], 1024);
+									close(cdhPipe[1]);
 								}
 							}else{
-								indexOfInput = letter - userDirectoryInput[0];
-								if(abs(indexOfInput) > 10){
-									printf("Inpute cannot be larger than 10 or less than 0.\n");
+								indexOfInput = userDirectoryInput[0] - letter;
+								if(indexOfInput > 10 || indexOfInput > fileLength - 1){
+									printf("Input cannot be larger than 10 or less than 0 or greater than the history list.\n");
+									write(cdhPipe[1], " ", 2);
+									close(cdhPipe[1]);
 								}else{
-									r = chdir(historyPathList[abs(indexOfInput)]);
-									if (r == -1){
-										printf("-%s: %s: path: %s, %s\n", sysname, command->name, historyPathList[abs(indexOfInput)],strerror(errno));
-									}
+									write(cdhPipe[1], historyPathList[indexOfInput], 1024);
+									close(cdhPipe[1]);
 								}
 							}
 						}
@@ -481,6 +487,11 @@ int process_command(struct command_t *command)
 				exit(0);
 			}
 		}
+
+		if(strcmp(command->name, "joker") == 0){
+
+		}
+
 		// increase args size by 2
 		command->args = (char **)realloc(
 			command->args, sizeof(char *) * (command->arg_count += 2));
@@ -500,11 +511,31 @@ int process_command(struct command_t *command)
 		exit(0);
 	}else{
 		/// TODO: Wait for child to finish if command is not running in background
-		if (command->background == 0) {
-		    wait(NULL);
-		}
-		//      wait(NULL);
 
+		if(command->background == 1){
+			wait(NULL);
+			if(strcmp(command->name, "cdh") == 0){
+				char read_buffer[1024];
+				nbytes = read(cdhPipe[0], read_buffer, 1024);
+				close(cdhPipe[0]);
+
+				r = chdir(read_buffer);
+				if (r == -1){
+					printf("-%s: %s: path: %s, %s\n", sysname, command->name, read_buffer, strerror(errno));
+				}
+			}
+		}else{
+			if(strcmp(command->name, "cdh") == 0){
+				char read_buffer[1024];
+				nbytes = read(cdhPipe[0], read_buffer, 1024);
+				close(cdhPipe[0]);
+
+				r = chdir(read_buffer);
+				if (r == -1){
+					printf("-%s: %s: path: %s, %s\n", sysname, command->name, read_buffer, strerror(errno));
+				}
+			}
+		}
 		return SUCCESS;
 	}
 
