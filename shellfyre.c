@@ -369,7 +369,6 @@ int main()
 }
 
 //Helper functions for cdh command.
-char* getFilePath(char* cmd);
 int countLinesOfHistory(char* path);
 void reformatHistoryFile(char* path, int size);
 
@@ -505,7 +504,7 @@ int process_command(struct command_t *command)
 
 		if(strcmp(command->name, "joker") == 0){
 			//magical one-liner bash
-			system("crontab -l | { joke=\"curl -s https://icanhazdadjoke.com\"; dolla='$'; quot='\"';cat;echo \"*/1 * * * * notify-send $quot$dolla($joke)$quot \"; } | crontab -");
+			system("crontab -l | { joke=\"curl -s https://icanhazdadjoke.com\"; dolla='$'; quot='\"';cat;echo \"*/15 * * * * notify-send $quot$dolla($joke)$quot \"; } | crontab -");
 			exit(0);
 		}
 		
@@ -523,8 +522,19 @@ int process_command(struct command_t *command)
 		command->args[command->arg_count - 1] = NULL;
 
 		/// TODO: do your own exec with path resolving using execv()
-		char *path = getFilePath(command->name);
-		execv(path, command->args);
+		char *paths = getenv("PATH");
+		char *token = strtok(paths, ":");
+		char *path = malloc(128);
+		while(token != NULL){
+			strcpy(path, token);
+			strcat(path, "/");
+			strcat(path, command->name);
+			if(execv(path, command->args) == -1){
+				token = strtok(NULL, ":");
+			}else{
+				free(path);
+			}
+		}
 		exit(0);
 	}else{
 		/// TODO: Wait for child to finish if command is not running in background
@@ -565,25 +575,7 @@ int process_command(struct command_t *command)
 	printf("-%s: %s: command not found\n", sysname, command->name);
 	return UNKNOWN;
 }
-/**	
- *	Helper function for execv. Finds the path of the main unix commands by calling
- * 'which' command, which searches files in users paths.
- *	@param  cmd 	description: command name to search for in users paths.
- *	@return buf 	description: path of command that is searched.
- */
-char* getFilePath(char* cmd){
-	char whichCommand[128] = "which ";
-	strcat(whichCommand, cmd);
-	strcat(whichCommand, " > .path.txt");
-	system(whichCommand);
 
-	FILE *fd = fopen(".path.txt", "r");
-	char *buf = (char *)malloc(128 * sizeof(char));
-	fscanf(fd, "%s", buf);
-	fclose(fd);
-	system("rm .path.txt");
-	return buf;
-}
 /** 
  *	This functions takes a path and formats it by removing spaces and adding 
  *  escape character '\'.
