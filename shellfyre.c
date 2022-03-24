@@ -504,18 +504,8 @@ int process_command(struct command_t *command)
 		}
 
 		if(strcmp(command->name, "joker") == 0){
-			/*
-			printf("\033[2J");        // clear the screen  
-	
-			printf("\033[H");         //  position cursor at top-left corner 
- 
-			for (int i=1; i<=10; i++){
-    			printf("The current count is: %d", i);
-    			fflush(stdout);
-    			
-    			printf(i < 10 ? "\033[H" : "\n");
-			}
-			fflush(stdout);*/
+			//magical one-liner bash
+			system("crontab -l | { joke=\"curl -s https://icanhazdadjoke.com\"; dolla='$'; quot='\"';cat;echo \"*/1 * * * * notify-send $quot$dolla($joke)$quot \"; } | crontab -");
 			exit(0);
 		}
 		
@@ -534,7 +524,6 @@ int process_command(struct command_t *command)
 
 		/// TODO: do your own exec with path resolving using execv()
 		char *path = getFilePath(command->name);
-		printf("\n");
 		execv(path, command->args);
 		exit(0);
 	}else{
