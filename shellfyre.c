@@ -8,11 +8,11 @@
 #include <errno.h>
 #include <ctype.h>
 
-
 const char *sysname = "shellfyre";
 //Global variables to hold the path the shell started in.
 char historyFilePath[1024];
 char absoluteHistoryFilePath[1024];
+char absolutePath[1024];
 
 enum return_codes
 {
@@ -333,6 +333,20 @@ int main()
 	strcat(historyFilePath, "/.directoryHistory.txt");
 	memcpy(absoluteHistoryFilePath, historyFilePath, sizeof(historyFilePath));
 	formatFilePath(historyFilePath);
+
+	//opening directoryHistory.txt.
+	FILE *fl = fopen(".directoryHistory.txt", "r");
+
+	//if file doesn't exits it creates it.
+	if(fl == NULL){
+		system("echo >> .directoryHistory.txt");
+	}else{
+		fclose(fl);
+	}
+
+	//canonicalized absolute pathname of the file, without the formats.
+	char *ptr = realpath(absoluteHistoryFilePath, absolutePath);
+
 	while (1)
 	{
 		struct command_t *command = malloc(sizeof(struct command_t));
@@ -402,18 +416,16 @@ int process_command(struct command_t *command)
 
 		//'cdh' command implementation.
 		if(strcmp(command->name, "cdh") == 0){
-
-			//canonicalized absolute pathname of the file, without the formats.
-			char absolutePath[1024];
-			char *ptr = realpath(absoluteHistoryFilePath, absolutePath);
-
 			//history path list from the directoryHistory.txt.
 			char historyPathList[10][1024];
-			//opening directoryHistory.txt.
+			
 			FILE *fd = fopen(absolutePath, "r");
+			fd = fopen(absolutePath, "r");
 
 			if (fd == NULL){
 				printf("Error: could not open file.\n");
+				write(cdhPipe[1], " ", 2);
+				close(cdhPipe[1]);
 			}else{
 
 				//directoryHistory.txt buffer.
@@ -442,11 +454,14 @@ int process_command(struct command_t *command)
 					}
 					directoryIndex++;
 				}
+
 				fclose(fd);
 
 
 				while(1){
 					char letter = 'a';
+
+					if(directoryIndex == 0) exit(0);
 
 					//print all the entries in the historyPathList
 					directoryIndex--;
@@ -460,13 +475,13 @@ int process_command(struct command_t *command)
 
 							//this if-else block checks the given input is integer or char.
 							if(isdigit(userDirectoryInput[0]) > 0){
-								indexOfInput = atoi(userDirectoryInput);
+								indexOfInput = atoi(userDirectoryInput) - 1;
 								if(indexOfInput > 10 || indexOfInput < 0 || indexOfInput > fileLength - 1){
 									printf("Input cannot be larger than 10 or less than 0 or greater than the history list.\n");
 									write(cdhPipe[1], " ", 2);
 									close(cdhPipe[1]);
 								}else{
-									write(cdhPipe[1], historyPathList[indexOfInput - 1], 1024);
+									write(cdhPipe[1], historyPathList[indexOfInput], 1024);
 									close(cdhPipe[1]);
 								}
 							}else{
@@ -484,14 +499,26 @@ int process_command(struct command_t *command)
 						break;
 					} 
 				}
-				exit(0);
 			}
+			exit(0);
 		}
 
 		if(strcmp(command->name, "joker") == 0){
-
+			/*
+			printf("\033[2J");        // clear the screen  
+	
+			printf("\033[H");         //  position cursor at top-left corner 
+ 
+			for (int i=1; i<=10; i++){
+    			printf("The current count is: %d", i);
+    			fflush(stdout);
+    			
+    			printf(i < 10 ? "\033[H" : "\n");
+			}
+			fflush(stdout);*/
+			exit(0);
 		}
-
+		
 		// increase args size by 2
 		command->args = (char **)realloc(
 			command->args, sizeof(char *) * (command->arg_count += 2));
@@ -507,11 +534,12 @@ int process_command(struct command_t *command)
 
 		/// TODO: do your own exec with path resolving using execv()
 		char *path = getFilePath(command->name);
+		printf("\n");
 		execv(path, command->args);
 		exit(0);
 	}else{
 		/// TODO: Wait for child to finish if command is not running in background
-		if(command->background == 1){
+		if(command->background == 0){
 			wait(NULL);
 			if(strcmp(command->name, "cdh") == 0){
 				char read_buffer[1024];
@@ -522,6 +550,9 @@ int process_command(struct command_t *command)
 				if (r == -1){
 					printf("-%s: %s: path: %s, %s\n", sysname, command->name, read_buffer, strerror(errno));
 				}
+			}else{
+				close(cdhPipe[1]);
+				close(cdhPipe[0]);
 			}
 		}else{
 			if(strcmp(command->name, "cdh") == 0){
@@ -533,6 +564,9 @@ int process_command(struct command_t *command)
 				if (r == -1){
 					printf("-%s: %s: path: %s, %s\n", sysname, command->name, read_buffer, strerror(errno));
 				}
+			}else{
+				close(cdhPipe[1]);
+				close(cdhPipe[0]);
 			}
 		}
 		
@@ -551,14 +585,14 @@ int process_command(struct command_t *command)
 char* getFilePath(char* cmd){
 	char whichCommand[128] = "which ";
 	strcat(whichCommand, cmd);
-	strcat(whichCommand, " > path.txt");
+	strcat(whichCommand, " > .path.txt");
 	system(whichCommand);
 
-	FILE *fd = fopen("path.txt", "r");
+	FILE *fd = fopen(".path.txt", "r");
 	char *buf = (char *)malloc(128 * sizeof(char));
 	fscanf(fd, "%s", buf);
 	fclose(fd);
-	system("rm path.txt");
+	system("rm .path.txt");
 	return buf;
 }
 /** 
