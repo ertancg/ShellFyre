@@ -539,6 +539,7 @@ int process_command(struct command_t *command)
 		exit(0);
 	}else{
 		/// TODO: Wait for child to finish if command is not running in background
+
 		if(command->background == 0){
 			wait(NULL);
 			if(strcmp(command->name, "cdh") == 0){
@@ -569,7 +570,6 @@ int process_command(struct command_t *command)
 				close(cdhPipe[0]);
 			}
 		}
-		
 		return SUCCESS;
 	}
 
