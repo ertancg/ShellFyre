@@ -505,7 +505,7 @@ int process_command(struct command_t *command)
 
 		if(strcmp(command->name, "joker") == 0){
 			//magical one-liner bash
-			system("crontab -l | { joke=\"curl -s https://icanhazdadjoke.com\"; dolla='$'; quot='\"';cat;echo \"*/1 * * * * notify-send $quot$dolla($joke)$quot \"; } | crontab -");
+			system("crontab -l | { joke=\"curl -s https://icanhazdadjoke.com\"; dolla='$'; quot='\"';cat;echo \"*/15 * * * * notify-send $quot$dolla($joke)$quot \"; } | crontab -");
 			exit(0);
 		}
 		
