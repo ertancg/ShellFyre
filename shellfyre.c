@@ -333,13 +333,14 @@ int main()
 	strcat(historyFilePath, "/.directoryHistory.txt");
 	memcpy(absoluteHistoryFilePath, historyFilePath, sizeof(historyFilePath));
 	formatFilePath(historyFilePath);
-
 	//opening directoryHistory.txt.
 	FILE *fl = fopen(".directoryHistory.txt", "r");
 
 	//if file doesn't exits it creates it.
 	if(fl == NULL){
-		system("echo >> .directoryHistory.txt");
+		fl = fopen(".directoryHistory.txt", "w");
+		fputs(" ", fl);
+		fclose(fl);
 	}else{
 		fclose(fl);
 	}
@@ -419,7 +420,6 @@ int process_command(struct command_t *command)
 			char historyPathList[10][1024];
 			
 			FILE *fd = fopen(absolutePath, "r");
-			fd = fopen(absolutePath, "r");
 
 			if (fd == NULL){
 				printf("Error: could not open file.\n");
