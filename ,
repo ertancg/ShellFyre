@@ -11,7 +11,6 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <stddef.h>
-#include <sys/stat.h>
 
 
 const char *sysname = "shellfyre";
@@ -477,12 +476,11 @@ int process_command(struct command_t *command)
 			 } 
 		     }
 		     exit(0);
-                } else if (strcmp(command->name, "take") == 0) {
+                } else if (strcmp(command->name, "take")) {
 		    char *arg = command->args[0];
 		    char cwd[5000];
 		    getcwd(cwd, sizeof(cwd));
 		    executeTake(arg, cwd);
-		    exit(0);
 		} else {
 
 		// increase args size by 2
@@ -525,21 +523,11 @@ int process_command(struct command_t *command)
 
 void executeTake(char *arg, char *path) {
 
-    printf("enter method\n");
-
-    printf("arg value is %s\n", arg);
-
-    printf("ABCDJLKA\n");
-
     char thisDir[256];
     char next = arg[0];
-    int index = 0;
+    index = 0;
 
-    printf("enter\n");
-
-    while (next != '/' && next != '\0') {
-
-	    printf("%c\n", next);
+    while (next != '/' || next != '\0') {
         thisDir[index] = next;
 	index++;
 	next = arg[index];
@@ -547,48 +535,27 @@ void executeTake(char *arg, char *path) {
 
     thisDir[index] = '\0';
 
-    char newPath[5000];
+    char[5000] newPath;
     strcpy(newPath, path);
     strcat(newPath, "/");
     strcat(newPath, thisDir);
 
-    // DIR *dir = opendir(newPath);
+    DIR *dir = opendir(newPath);
 
-
-    printf("the new path dir is %s\n", newPath);
-
-    struct stat stats;
-    stat(newPath, &stats);
-
-    bool check;
-    if (S_ISDIR(stats.st_mode) == 1) {
-
-	printf("directory exists\n");
-        check = 1;
-    } else {
-        check = 0;
-    }
-
-    if (check == 0) {
-	printf("enoent works\n");
+    if (ENOENT = errno) {
         // directory doesn't exist
 	char *mkdir = getFilePath("mkdir");
 	char *args[] = {thisDir, NULL};
-	printf("here\n");
-	execl(mkdir, mkdir, thisDir, NULL);
+	execv(mkdir, args);
     }
-    pid_t pid = fork();
-    if (pid == 0) {
-        exit(0);
-    }
-    if (chdir(newPath) == 0) {
-        printf("succes\n");
-    } else {
-        printf("fail\n");
-    }
+    // go to directory
+    char *cd = getFilePath("cd");
+    char *args[] = {thisDir, NULL};
+    execv(cd, args);
+    
     if (next == '/') {
         executeTake((arg + (index + 1)), newPath);   
-    } 
+    }
 }
 
 void recursiveFileSearch(char* path, bool open, char *argName, char *dirUntilNow) {
@@ -640,22 +607,14 @@ void recursiveFileSearch(char* path, bool open, char *argName, char *dirUntilNow
 	        if (flag == 1) {
 	            printf("%s\n", string);
 		    if (open) {
-                        struct stat path_stats;
-			stat(updatedString, &path_stats);
-			if (S_ISREG(path_stats.st_mode)) {
-			    //fopen(string, "w+");
-			    char *path2 = getFilePath("xdg-open");
-			    char file_name[256];
-			    printf("path of xdg is %s\n", path2);
-			    strcpy(file_name, (string + 2));
-			    printf("opening %s\n", file_name);
-			    char *array = {file_name, NULL};
-		            pid_t pid = fork();
-		            if (pid == 0) {	
-              		        execl(path2, path2, file_name, NULL);
-			        exit(0);
-			    }  
-		        }
+			//fopen(string, "w+");
+			char *path2 = getFilePath("xdg-open");
+			char file_name[256];
+			printf("path of xdg is %s\n", path2);
+			strcpy(file_name, (string + 2));
+			printf("opening %s\n", file_name);
+			char *array[] = {file_name, NULL}; 
+              		execv(path2, array);
 		    }
 	        }
 		strcat(string, slash);
