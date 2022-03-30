@@ -6,7 +6,18 @@
 #include <string.h>
 #include <stdbool.h>
 #include <errno.h>
+
 #include <ctype.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/syscall.h>
+#include<sys/ioctl.h>
+
+#define finit_module(module_descriptor, params, flags) syscall(__NR_finit_module, module_descriptor, params, flags)
+#define delete_module(module_name, flags) syscall(__NR_delete_module, module_name, flags)
+#define IOCTL_MODE_READ _IOW('p', 0, char*)
+#define IOCTL_PID_READ _IOW('p', 1, int32_t*)
+
 
 const char *sysname = "shellfyre";
 //Global variables to hold the path the shell started in.
@@ -379,8 +390,12 @@ int process_command(struct command_t *command)
 	if (strcmp(command->name, "") == 0)
 		return SUCCESS;
 
-	if (strcmp(command->name, "exit") == 0)
+	if (strcmp(command->name, "exit") == 0){
+		if(delete_module("pstree_driver", O_NONBLOCK) != 0){
+			printf("Couldn't remove module: %s", strerror(errno));
+		}
 		return EXIT;
+	}
 
 	if (strcmp(command->name, "cd") == 0){
 		if (command->arg_count > 0)
@@ -407,7 +422,7 @@ int process_command(struct command_t *command)
 	int cdhPipe[2], nbytes;
 
 	if(pipe(cdhPipe) < 0){
-		printf("Error when creating cdhPipe: %s", strerror(errno));
+		printf("Error when creating cdhPipe: %s\n", strerror(errno));
 	}
 	
 	pid_t pid = fork();
@@ -508,6 +523,41 @@ int process_command(struct command_t *command)
 			exit(0);
 		}
 		
+		if(strcmp(command->name, "pstree") == 0){
+			if(command->arg_count != 2){
+				printf("Usage: pstree <pid> <-d or -b>: for breadth-first-search or depth first search.\n");
+				exit(0);
+			}
+
+			int md = open("pstree_driver.ko", O_RDONLY);
+			char msg[128];
+
+			if(md < 0){
+				printf("Could not open device file: %s\n", strerror(errno));
+			}
+			
+			if(finit_module(md, "", 0) != 0){
+				//printf("Couldn't load kernel module: %s\n", strerror(errno)); //DEBUG: uncomment for debug
+			}
+
+			close(md);
+			strcat(msg, command->args[0]);
+			strcat(msg, " ");
+			strcat(msg, command->args[1]);
+			
+			int fd = open("/dev/pstree_device", O_RDWR);
+
+			if(fd < 0){
+				printf("Cannot open device file: %s\n", strerror(errno));
+			}
+
+			ioctl(fd, IOCTL_MODE_READ, command->args[1]);
+			int input_pid = atoi(command->args[0]);
+			ioctl(fd, IOCTL_PID_READ, (int32_t *) &input_pid);
+
+			close(fd);
+			exit(0);
+		}
 		// increase args size by 2
 		command->args = (char **)realloc(
 			command->args, sizeof(char *) * (command->arg_count += 2));
@@ -522,8 +572,8 @@ int process_command(struct command_t *command)
 		command->args[command->arg_count - 1] = NULL;
 
 		/// TODO: do your own exec with path resolving using execv()
-		char *paths = getenv("PATH");
-		char *token = strtok(paths, ":");
+		char *user_paths = getenv("PATH");
+		char *token = strtok(user_paths, ":");
 		char *path = malloc(128);
 		while(token != NULL){
 			strcpy(path, token);
