@@ -1,13 +1,14 @@
-#include<linux/kernel.h>
-#include<linux/init.h>
-#include<linux/module.h>
-#include<linux/kdev_t.h>
-#include<linux/fs.h>
-#include<linux/cdev.h>
-#include<linux/device.h>
-#include<linux/slab.h>
-#include<linux/uaccess.h>
+#include <linux/kernel.h>
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/kdev_t.h>
+#include <linux/fs.h>
+#include <linux/cdev.h>
+#include <linux/device.h>
+#include <linux/slab.h>
+#include <linux/uaccess.h>
 #include <linux/ioctl.h>
+#include <linux/sched.h>
 
 #define IOCTL_MODE_READ _IOW('p', 0, char*)
 #define IOCTL_PID_READ _IOW('p', 1, int32_t*)
@@ -16,6 +17,14 @@ int32_t pid;
 char mode[8];
 
 dev_t dev = 0;
+
+struct queue_entry{
+	char name[128];
+	int id;
+	struct list_head lst;
+};
+
+static LIST_HEAD(task_queue);
 
 static struct class *dev_class;
 static struct cdev my_cdev;
@@ -28,6 +37,9 @@ static ssize_t pstree_read(struct file *filp, char __user *buf, size_t len, loff
 static ssize_t pstree_write(struct file *filp, const char __user *buf, size_t len, loff_t* off);
 static long pstree_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
 static void process_command(void);
+static void bfs(struct task_struct *task);
+static void bfs_initiate(struct task_struct *task);
+static void print_queue(void);
 
 static struct file_operations fops = 
 {
@@ -82,9 +94,54 @@ static void process_command(){
 		}
 	}
 	if(strcmp(mode, "-b") == 0){
-		printk(KERN_INFO"breadth first on pid: %d", pid);
+		bfs_initiate(&init_task);
 	}
 }
+
+static void bfs_initiate(struct task_struct *task){
+	INIT_LIST_HEAD(&task_queue);
+	for_each_process(task){
+		if((int) pid == task->pid){
+			struct queue_entry *head = kmalloc(sizeof(*head), GFP_KERNEL); 
+			strcpy(head->name, task->comm);
+			head->id = task->pid;
+			list_add_tail(&head->lst, &task_queue);
+			bfs(task);
+			print_queue();
+			break;
+		}
+	}
+}
+
+static void bfs(struct task_struct *task){
+	struct task_struct *current_task;
+	struct list_head *list;
+	struct queue_entry *new;
+
+	list_for_each(list, &task->children) {
+    	current_task = list_entry(list, struct task_struct, sibling);
+    	
+    	/* task now points to one of current's children */ 
+    	printk(KERN_INFO"name: %s[%d]\n", current_task->comm, current_task->pid);
+    	new = kmalloc(sizeof(*new), GFP_KERNEL);
+    	strcpy(new->name, task->comm);
+    	new->id = task->pid;
+    	INIT_LIST_HEAD(&new->lst);
+ 
+    	list_add_tail(&new->lst, &task_queue);
+    	bfs(current_task);
+    }
+}
+
+static void print_queue(){
+	struct queue_entry *current_entry;
+	struct list_head *list;
+	list_for_each(list, &task_queue){
+		current_entry = list_entry(list, struct queue_entry, lst);
+		printk(KERN_INFO"QUEUE READ = name: %s, id: %d", current_entry->name, current_entry->id);
+	}
+}
+
 static ssize_t pstree_write(struct file *filp, const char __user *buf, size_t len, loff_t* off){
 	return len;
 }
