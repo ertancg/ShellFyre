@@ -385,7 +385,6 @@ int main()
 //Helper functions for cdh command.
 int countLinesOfHistory(char* path);
 void reformatHistoryFile(char* path, int size);
-void print_offset_message(char *message);
 
 int process_command(struct command_t *command)
 {
@@ -603,8 +602,8 @@ int process_command(struct command_t *command)
 			message[strlen(message) - 1] = '\0';
 
 			int message_length = strlen(message);
-			/* This is where the magic happend if the magic exceeds the max length, words are divided apart.
-			 * If a words length is greater than the max lenght, which is 32, then it breaks the dialog bubble.
+			/* This is where the magic happens if the message exceeds the max length, words are divided apart.
+			 * If a words length is greater than the max length, which is 32, then it breaks the dialog bubble.
 			 * Should not behave weirdly but needs further testing.
 			 * 
 			 * */
