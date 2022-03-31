@@ -385,6 +385,7 @@ int main()
 //Helper functions for cdh command.
 int countLinesOfHistory(char* path);
 void reformatHistoryFile(char* path, int size);
+void print_offset_message(char *message);
 
 int process_command(struct command_t *command)
 {
@@ -542,11 +543,14 @@ int process_command(struct command_t *command)
 			}
 
 			char msg[128];
+
+			//Main logic to check if the driver is installed. If not then installs it.
 			if(driver_installed == 0){
 				int md = open("pstraverse_driver.ko", O_RDONLY);
 
 				if(md < 0){
 					printf("Could not open device file: %s\n", strerror(errno));
+					exit(0);
 				}
 
 				if(finit_module(md, "", 0) != 0){
@@ -579,6 +583,117 @@ int process_command(struct command_t *command)
 			close(fd);
 			exit(0);
 		}
+
+		if(strcmp(command->name, "penguinsays") == 0){
+			char message[4096];
+			int arg_length = 0;
+			int max_length = 32;
+
+			if(command->arg_count > 0){
+				printf("Usage: penguinsays <message>: write the message you want for the penguin to say.\n");
+				exit(0);
+			}
+
+			while(arg_length < command->arg_count){
+				strcat(message, command->args[arg_length]);
+				strcat(message, " ");
+				arg_length++;
+			}
+
+			message[strlen(message) - 1] = '\0';
+
+			int message_length = strlen(message);
+			/* This is where the magic happend if the magic exceeds the max length, words are divided apart.
+			 * If a words length is greater than the max lenght, which is 32, then it breaks the dialog bubble.
+			 * Should not behave weirdly but needs further testing.
+			 * 
+			 * */
+			if(message_length > max_length){
+				for(int i = 0; i < max_length + 2; i++){
+					if(i == 0){
+						printf(" ");
+					}else if(i == max_length + 1){
+						printf(" ");
+					}else{
+						printf("-");
+					}
+				}
+				printf("\n");
+
+				char *token = strtok(message, " ");
+				int counter = strlen(token);
+				printf("|");
+				while(token != NULL){
+					if(counter < max_length){
+						printf("%s ", token);
+						counter++;
+					}else{
+						for(int i = counter - strlen(token); i < max_length; i++){
+							printf(" ");
+						}
+						printf("|\n");
+						printf("|");
+						printf("%s ", token);
+						counter = strlen(token) + 1;
+					}
+					token = strtok(NULL, " ");
+					if(token == NULL){
+						for(int i = counter; i < max_length; i++){
+							printf(" ");
+						}
+						printf("|\n");
+						break;
+					}else{
+						counter += strlen(token);
+					}
+				}
+				for(int i = 0; i < max_length + 2; i++){
+					if(i == 0){
+						printf(" ");
+					}else if(i == (max_length + 1)){
+						printf(" ");
+					}else{
+						printf("-");
+					}
+				}
+			}else{
+				/* 
+				 * Prints the message in one line if its less than the length.
+				 */
+				for(int i = 0; i < message_length + 2; i++){
+					if(i == 0){
+						printf(" ");
+					}else if(i == message_length + 1){
+						printf(" ");
+					}else{
+						printf("-");
+					}
+				}
+				printf("\n");
+
+				printf("|%s|\n", message);
+
+				for(int i = 0; i < message_length + 2; i++){
+					if(i == 0){
+						printf(" ");
+					}else if(i == (message_length + 1)){
+						printf(" ");
+					}else{
+						printf("-");
+					}
+				}
+			}
+
+			
+
+			
+			printf("\n");
+			printf("    | /\n");
+			printf("(o_ |/\n//\\ \nV_/_\n");
+			exit(0);
+		}
+
+
 		// increase args size by 2
 		command->args = (char **)realloc(
 			command->args, sizeof(char *) * (command->arg_count += 2));
@@ -608,8 +723,11 @@ int process_command(struct command_t *command)
 		}
 		exit(0);
 	}else{
-		/// TODO: Wait for child to finish if command is not running in background
-
+		/*	Whether its a background execution or not it closes the pipes of the called commands. 
+		 *  --cdh if-block changes the directory accordingly and updates the history based on the change.
+		 * 	--pstravers if-block changes the driver_loaded field if the driver succesfully loaded. 
+		 * 
+		 */
 		if(command->background == 0){
 			wait(NULL);
 			if(strcmp(command->name, "cdh") == 0){
