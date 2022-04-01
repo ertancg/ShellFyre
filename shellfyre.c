@@ -643,18 +643,15 @@ void recursiveFileSearch(char* path, bool open, char *argName, char *dirUntilNow
                         struct stat path_stats;
 			stat(updatedString, &path_stats);
 			if (S_ISREG(path_stats.st_mode)) {
-			    //fopen(string, "w+");
 			    char *path2 = getFilePath("xdg-open");
-			    char file_name[256];
-			    printf("path of xdg is %s\n", path2);
+			    char file_name[255];
 			    strcpy(file_name, (string + 2));
-			    printf("opening %s\n", file_name);
-			    char *array = {file_name, NULL};
 		            pid_t pid = fork();
-		            if (pid == 0) {	
+		            if (pid == 0) {	    
               		        execl(path2, path2, file_name, NULL);
 			        exit(0);
-			    }  
+			    }
+			    wait(0);  
 		        }
 		    }
 	        }
