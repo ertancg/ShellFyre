@@ -326,7 +326,6 @@ int prompt(struct command_t *command)
 int process_command(struct command_t *command);
 void formatFilePath(char* path);
 void recursiveFileSearch(char* path, bool open, char *argName, char *dirUntilNow);
-void executeTake(char *arg, char *path);
 int main()
 {
 	getcwd(cwdHistory, sizeof(cwdHistory));
@@ -384,6 +383,12 @@ int process_command(struct command_t *command)
 		}
 	}
 
+	int takePipe[2], nbytes;
+
+	if (pipe(takePipe) < 0 ) {
+	    printf("Error when creating takePipe: %s\n", strerror(errno));
+	}
+
 	// TODO: Implement your custom commands here
 
 	pid_t pid = fork();
@@ -411,7 +416,7 @@ int process_command(struct command_t *command)
 			 argName = command->args[0];
 		     } else if (command->arg_count == 2) {
 			 argName = command->args[1];
-		         if (strcmp(command->args[1], p_o) == 0) {
+		         if (strcmp(command->args[0], p_o) == 0) {
 			     // turn open flag on
 			     // turn recursion flag off
 			     recursion = false;
@@ -434,10 +439,10 @@ int process_command(struct command_t *command)
 		     char *slashDot = "./";
 		     strcpy(dirName, slashDot);
 		     
-		     if (recursion) {
-			 if (open) {
+		     if (recursion) { // execute file search with recursion
+			 if (open) { // open flag is on
 		             recursiveFileSearch(cwd, open, argName, dirName);
-		 	 } else {
+		 	 } else { // open flag is off
 			     recursiveFileSearch(cwd, open, argName, dirName);
 			 }
 		     } else {
@@ -447,7 +452,8 @@ int process_command(struct command_t *command)
 
 			 d = opendir(cwd);
 			 
-			 if (d) { 
+			 if (d) {
+		             // iterate over all directories 
 		             while ((dir = readdir(d)) != NULL) {
 			         int arglength = strlen(argName);
 			         char *dir_name = dir->d_name;
@@ -455,6 +461,7 @@ int process_command(struct command_t *command)
 
 			         bool flag = 0;
 			         int i = 0;
+				 // check if the argument name is within the directory name
 			         for (i = 0; i < nameLength; i++) {
 				     if (argName[0] == dir_name[i]) {
 				         bool flag2 = 1;
@@ -471,17 +478,137 @@ int process_command(struct command_t *command)
 				     }
 				 }	         
 			         if (flag == 1) {
+			             // print directory name
 				     printf("./%s\n", dir_name);
+				     if (open) {
+					 char updatedString[5000];
+					 char cwd[5000];
+				         getcwd(cwd, sizeof(cwd));
+					 strcpy(updatedString, cwd);
+					 char *slash = "/";
+					 strcat(updatedString, slash);
+					 strcat(updatedString, dir_name);
+					 struct stat path_stats;
+					 stat(updatedString, &path_stats);
+				         if (S_ISREG(path_stats.st_mode)) {
+						// open if file
+						char call[256];
+						strcpy(call, "xdg-open ");
+						strcat(call, dir_name);
+					     pid_t pid = fork();
+					     if (pid == 0) {
+					         system(call);
+				                 exit(0);
+					     }
+					     wait(0);
+					 }
+				     }
 				 } 	 
 			     }
+
 			 } 
 		     }
 		     exit(0);
                 } else if (strcmp(command->name, "take") == 0) {
+		    // take command takes a path as its argument and creates all directories that follow onto the 
+		    // final one if they don't exist and passes the final directory path as pipe to the parent process
 		    char *arg = command->args[0];
+		    // get current working directory
 		    char cwd[5000];
 		    getcwd(cwd, sizeof(cwd));
-		    executeTake(arg, cwd);
+
+		    int argLength = strlen(arg);
+
+		    int i = 0;
+		    int slashCount = 0;
+		    for (i = 0; i < argLength; i++) {
+		        char c = arg[i];
+			if (c == '/') {
+			    slashCount++;
+			}
+		    }
+
+		    char currentPath[1024];
+		    getcwd(currentPath, sizeof(cwd));
+		    strcat(currentPath, "/");
+		    int k = 0;
+
+		    int limit = (slashCount + 1);
+
+		    // for all directories involved in the input, iterate over the loop to create directory if it 
+		    // doesn't exist and change directory at the end.
+		    for (i = 0; i < (slashCount + 1); i++) {
+		        int j = 0;
+			char thisDir[256];
+		        char c = arg[k];
+			while (c != '/' && c != '\0') {
+			    thisDir[j] = c;
+			    j += 1;
+			    c = arg[k + j];
+			}
+			thisDir[j] = '\0';
+			k = j + 1;
+			strcat(currentPath, thisDir);
+			struct stat stats;
+			stat(currentPath, &stats);
+			if (S_ISDIR(stats.st_mode) != 1) {
+			    mkdir(thisDir, 0777);
+	                }
+			chdir(currentPath);
+			strcat(currentPath, "/");
+		    }
+		    
+		    // write final directory path into pipe
+		    write(takePipe[1], currentPath, 1024);
+		    close(takePipe[1]);
+
+		    exit(0);
+		} else if (strcmp(command->name, "create") == 0) { 
+		    // create command creates the directory name passed into the argument field under all
+		    // directories that are within the current working directory.
+		    char *arg = command->args[0];
+
+		    DIR *d;
+		    struct dirent *dir;
+
+		    // get current working directory.
+		    char currentwd[256];
+		    getcwd(currentwd, sizeof(currentwd));
+
+		    d = opendir(currentwd);
+
+		    if (d) {
+			// iterate over all directories involved within the current working directory.
+		        while ((dir = readdir(d)) != NULL) {
+		            char *dir_name = dir->d_name;
+			    char currentPath[2000];
+			    strcpy(currentPath, currentwd);
+			    strcat(currentPath, "/");
+			    strcat(currentPath, dir_name);
+			    struct stat stats;
+			    stat(currentPath, &stats);
+			    // if found file is a directory fork a child, change path onto it and create directory
+			    // with argument name.
+			    if (S_ISDIR(stats.st_mode) == 1) {
+			        int j = 0;
+				bool check = true;
+				for (j = 0; j < strlen(dir_name); j++) {
+				    if (dir_name[j] != '.') {
+				        check = false;
+				    }
+				}
+				if (check == false) { 
+			            pid_t pid3 = fork();
+			            if (pid3 == 0) {
+			                chdir(currentPath);
+				        mkdir(arg, 0777);
+				        exit(0);
+			            }
+				    wait(0);
+			        }
+			    }
+			}
+		    }
 		    exit(0);
 		} else {
 
@@ -513,6 +640,24 @@ int process_command(struct command_t *command)
 		/// TODO: Wait for child to finish if command is not running in background
 		if (command->background == 0) {
 		    wait(NULL);
+
+		    // read pipe for the name of the directory to change onto with the parent process.
+		    if (strcmp(command->name, "take") == 0) {
+		        char read_buffer[1024];
+			nbytes = read(takePipe[0], read_buffer, 1024);
+		        close(takePipe[0]);
+			chdir(read_buffer);
+		    } 
+		} else {
+                    // read pipe for the name of the directory to change onto with the parent process.		
+		    if (strcmp(command->name, "take") == 0) {
+		        char read_buffer[1024];
+		        nbytes = read(takePipe[0], read_buffer, 1024);
+	                close(takePipe[0]);
+
+			chdir(read_buffer);
+		    }
+		
 		}
 		//      wait(NULL);
 
@@ -523,75 +668,9 @@ int process_command(struct command_t *command)
 	return UNKNOWN;
 }
 
-void executeTake(char *arg, char *path) {
-
-    printf("enter method\n");
-
-    printf("arg value is %s\n", arg);
-
-    printf("ABCDJLKA\n");
-
-    char thisDir[256];
-    char next = arg[0];
-    int index = 0;
-
-    printf("enter\n");
-
-    while (next != '/' && next != '\0') {
-
-	    printf("%c\n", next);
-        thisDir[index] = next;
-	index++;
-	next = arg[index];
-    }
-
-    thisDir[index] = '\0';
-
-    char newPath[5000];
-    strcpy(newPath, path);
-    strcat(newPath, "/");
-    strcat(newPath, thisDir);
-
-    // DIR *dir = opendir(newPath);
-
-
-    printf("the new path dir is %s\n", newPath);
-
-    struct stat stats;
-    stat(newPath, &stats);
-
-    bool check;
-    if (S_ISDIR(stats.st_mode) == 1) {
-
-	printf("directory exists\n");
-        check = 1;
-    } else {
-        check = 0;
-    }
-
-    if (check == 0) {
-	printf("enoent works\n");
-        // directory doesn't exist
-	char *mkdir = getFilePath("mkdir");
-	char *args[] = {thisDir, NULL};
-	printf("here\n");
-	execl(mkdir, mkdir, thisDir, NULL);
-    }
-    pid_t pid = fork();
-    if (pid == 0) {
-        exit(0);
-    }
-    if (chdir(newPath) == 0) {
-        printf("succes\n");
-    } else {
-        printf("fail\n");
-    }
-    if (next == '/') {
-        executeTake((arg + (index + 1)), newPath);   
-    } 
-}
-
 void recursiveFileSearch(char* path, bool open, char *argName, char *dirUntilNow) {
+    // implements a recursive file search whose internal details are as provided under the non-recursive call.
+    // uses recursion to iterate over all sub directories.
     DIR *d;
     struct dirent *dir;
     d = opendir(path);
@@ -638,17 +717,17 @@ void recursiveFileSearch(char* path, bool open, char *argName, char *dirUntilNow
 	        strcat(updatedString, slash);
 	        strcat(updatedString, dir_name);
 	        if (flag == 1) {
-	            printf("%s\n", string);
+		    printf("%s\n", string);
 		    if (open) {
                         struct stat path_stats;
 			stat(updatedString, &path_stats);
 			if (S_ISREG(path_stats.st_mode)) {
-			    char *path2 = getFilePath("xdg-open");
-			    char file_name[255];
-			    strcpy(file_name, (string + 2));
+		            char call[256];
+			    strcpy(call, "xdg-open ");
+			    strcat(call, (string + 2));
 		            pid_t pid = fork();
 		            if (pid == 0) {	    
-              		        execl(path2, path2, file_name, NULL);
+				system(call);
 			        exit(0);
 			    }
 			    wait(0);  
