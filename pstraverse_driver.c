@@ -45,7 +45,9 @@ static void process_command(void);
 static void bfs(struct task_struct *task);
 static void bfs_initiate(struct task_struct *task);
 static void print_queue(void);
-static void clean_bfs_queue(void);
+static void clean_queue(void);
+static void dfs(struct task_struct *task);
+static void dfs_initiate(struct task_struct *task);
 
 //Driver mappings
 static struct file_operations fops = 
@@ -99,13 +101,21 @@ static long pstraverse_ioctl(struct file *file, unsigned int cmd, unsigned long 
 //This function determines the mode and executes the algorithm accordingly
 static void process_command(){
 	if(strcmp(mode, "-d") == 0){
-		if((int)pid == 1234){
-			printk(KERN_INFO"depth first on pid: %d", pid);
-		}
+		dfs_initiate(&init_task);
 	}
 	if(strcmp(mode, "-b") == 0){
 		bfs_initiate(&init_task);
 	}
+}
+//Initalizer for dfs that searches for the task that has the corresponding pid
+static void dfs_initiate(struct task_struct *task){
+    for_each_process(task) {
+    	if ((int) pid == task->pid) {
+	    	dfs(task);
+	    	print_queue();
+	    	break;
+		}
+    }
 }
 
 //Initalizer for bfs that searches for the task that has the corresponding pid
@@ -117,6 +127,30 @@ static void bfs_initiate(struct task_struct *task){
 			break;
 		}
 	}
+}
+/**
+ * This function takes a task as root and traverses one branch as long as it goes.
+ * 
+ * @param  task root of the process tree thats going to be 
+ * 				traversed.
+ *
+ */
+static void dfs(struct task_struct *task) {
+    struct task_struct *current_task;
+    struct list_head *list;
+    struct queue_entry *new;
+
+    new = kmalloc(sizeof(*new), GFP_KERNEL);
+    strcpy(new->name, task->comm);
+    new->id = task->pid;
+
+    INIT_LIST_HEAD(&new->lst);
+    list_add_tail(&new->lst, &task_queue);
+
+    list_for_each(list, &task->children) {
+        current_task = list_entry(list, struct task_struct, sibling);
+		dfs(current_task);
+    }
 }
 
 /**
@@ -163,7 +197,7 @@ static void print_queue(){
 }
 
 //Frees the memory thats allocated to the bfs queue
-static void clean_bfs_queue(){
+static void clean_queue(){
 	struct queue_entry *current_entry;
 	struct list_head *list;
 
@@ -217,7 +251,7 @@ static int __init pstraverse_driver_init(void){
 }
 
 void __exit pstraverse_driver_exit(void){
-	clean_bfs_queue();
+	clean_queue();
 	device_destroy(dev_class, dev);
 	class_destroy(dev_class);
 	cdev_del(&my_cdev);
