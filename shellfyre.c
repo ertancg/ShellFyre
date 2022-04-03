@@ -533,8 +533,6 @@ int process_command(struct command_t *command)
 		    strcat(currentPath, "/");
 		    int k = 0;
 
-		    int limit = (slashCount + 1);
-
 		    // for all directories involved in the input, iterate over the loop to create directory if it 
 		    // doesn't exist and change directory at the end.
 		    for (i = 0; i < (slashCount + 1); i++) {
@@ -547,13 +545,33 @@ int process_command(struct command_t *command)
 			    c = arg[k + j];
 			}
 			thisDir[j] = '\0';
-			k = j + 1;
-			strcat(currentPath, thisDir);
-			struct stat stats;
-			stat(currentPath, &stats);
-			if (S_ISDIR(stats.st_mode) != 1) {
+			printf("this dir IS: %s\n", thisDir);
+			k = k + j + 1;
+			// strcat(currentPath, thisDir);
+			// struct stat stats;
+			// stat(currentPath, &stats);
+			printf("current path: %s \n", currentPath);
+
+			bool dir_check = false;
+
+			DIR *d;
+			struct dirent *dir;
+			d = opendir(currentPath);
+			if (d) {
+			    while ((dir = readdir(d)) != NULL) {
+			        char *dir_name = dir->d_name;
+				if (strcmp(dir_name, thisDir) == 0) {
+				    dir_check = true;
+				}
+			    }
+			}
+
+			if (dir_check == false) {
 			    mkdir(thisDir, 0777);
-	                }
+	                } else {
+			    printf("prints 1\n");
+			}
+			strcat(currentPath, thisDir);
 			chdir(currentPath);
 			strcat(currentPath, "/");
 		    }
