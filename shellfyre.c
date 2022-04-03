@@ -603,7 +603,7 @@ int process_command(struct command_t *command)
 			int arg_length = 0;
 			int max_length = 32;
 
-			if(command->arg_count > 0){
+			if(command->arg_count == 0){
 				printf("Usage: penguinsays <message>: write the message you want for the penguin to say.\n");
 				exit(0);
 			}
@@ -863,12 +863,12 @@ int process_command(struct command_t *command)
 			    c = arg[k + j];
 			}
 			thisDir[j] = '\0';
-			printf("this dir IS: %s\n", thisDir);
+			//printf("this dir IS: %s\n", thisDir);
 			k = k + j + 1;
 			// strcat(currentPath, thisDir);
 			// struct stat stats;
 			// stat(currentPath, &stats);
-			printf("current path: %s \n", currentPath);
+			//printf("current path: %s \n", currentPath);
 
 			bool dir_check = false;
 
@@ -878,16 +878,16 @@ int process_command(struct command_t *command)
 			if (d) {
 			    while ((dir = readdir(d)) != NULL) {
 			        char *dir_name = dir->d_name;
-				if (strcmp(dir_name, thisDir) == 0) {
-				    dir_check = true;
-				}
+					if (strcmp(dir_name, thisDir) == 0) {
+				   	 	dir_check = true;
+					}	
 			    }
 			}
 
 			if (dir_check == false) {
 			    mkdir(thisDir, 0777);
-	                } else {
-			    printf("prints 1\n");
+	        } else {
+			    printf("Directory already exits.\n");
 			}
 			strcat(currentPath, thisDir);
 			chdir(currentPath);
@@ -1037,6 +1037,20 @@ int process_command(struct command_t *command)
 				nbytes = read(takePipe[0], read_buffer, 1024);
 				close(takePipe[0]);
 				chdir(read_buffer);
+				
+				char changedPath[1024];
+				getcwd(changedPath, sizeof(changedPath)); 
+				FILE *fd = fopen(absolutePath, "a");
+				if(fd == NULL){
+					printf("Error: could not open file: %s\n", strerror(errno));
+				}else{
+					if(countLinesOfHistory(absolutePath) == 1){
+						fputs("\n", fd);
+					}
+					fputs(changedPath, fd);
+					fputs("\n", fd);
+				}
+				fclose(fd);
 			}else{
 				close(takePipe[0]);
 				close(takePipe[1]);
@@ -1085,8 +1099,21 @@ int process_command(struct command_t *command)
 				char read_buffer[1024];
 				nbytes = read(takePipe[0], read_buffer, 1024);
 				close(takePipe[0]);
-
 				chdir(read_buffer);
+
+				char changedPath[1024];
+				getcwd(changedPath, sizeof(changedPath)); 
+				FILE *fd = fopen(absolutePath, "a");
+				if(fd == NULL){
+					printf("Error: could not open file: %s\n", strerror(errno));
+				}else{
+					if(countLinesOfHistory(absolutePath) == 1){
+						fputs("\n", fd);
+					}
+					fputs(changedPath, fd);
+					fputs("\n", fd);
+				}
+				fclose(fd);
 			}else{
 				close(takePipe[0]);
 				close(takePipe[1]);
