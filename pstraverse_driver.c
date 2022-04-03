@@ -118,6 +118,16 @@ static void dfs_initiate(struct task_struct *task){
     }
 }
 
+static void dfs_initiate(struct task_struct *task) {
+    for_each_process(task) {
+    	if ((int) pid == task->pid) {
+	    dfs(task);
+	    print_queue();
+	    break;
+	}
+    }
+}
+
 //Initalizer for bfs that searches for the task that has the corresponding pid
 static void bfs_initiate(struct task_struct *task){
 	for_each_process(task){
@@ -150,6 +160,24 @@ static void dfs(struct task_struct *task) {
     list_for_each(list, &task->children) {
         current_task = list_entry(list, struct task_struct, sibling);
 		dfs(current_task);
+    }
+}
+
+static void dfs(struct task_struct *task) {
+    struct task_struct *current_task;
+    struct list_head *list;
+    struct queue_entry *new;
+
+    new = kmalloc(sizeof(*new), GFP_KERNEL);
+    strcpy(new->name, task->comm);
+    new->id = task->pid;
+
+    INIT_LIST_HEAD(&new->lst);
+    list_add_tail(&new->lst, &task_queue);
+
+    list_for_each(list, &task->children) {
+        current_task = list_entry(list, struct task_struct, sibling);
+	dfs(current_task);
     }
 }
 
