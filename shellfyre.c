@@ -432,7 +432,7 @@ int process_command(struct command_t *command)
 		}
 	}
 
-	int takePipe[2], nbytes;
+	int takePipe[2], nbytes2;
 
 	if (pipe(takePipe) < 0 ) {
 		printf("Error when creating takePipe: %s\n", strerror(errno));
